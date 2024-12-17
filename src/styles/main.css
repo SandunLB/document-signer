@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+#pdf-viewer {
+    position: relative !important;
+    overflow: hidden;
+    max-width: 880px;
+    margin: 0 auto;
+}
+
+#pdf-viewer canvas {
+    display: block;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+.signature-preview,
+.date-time-preview,
+.stamp-preview,
+.text-preview {
+    position: absolute !important;
+    touch-action: none;
+    user-select: none;
+    z-index: 1000;
+    pointer-events: auto;
+    cursor: move;
+}

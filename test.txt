@@ -1,0 +1,3 @@
+yoo yooo :), now its working  ,
+
+you know what , lets jump to next task , as you can see , in my pdf editor (main.js) when we save file its usually download right ? i want it like this , when we click 'Download Signed Document' , it replace the our document with new edited one in uploads folder , and also want to update mysql database table 
