@@ -432,19 +432,30 @@ async function handleDownload() {
         // Create new PDF with added elements
         const pdfBytes = await createModifiedPDF(elementsData);
         
-        // Download the PDF
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'modified-document.pdf';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        // Send the modified PDF to the server
+        const formData = new FormData();
+        formData.append('pdf', new Blob([pdfBytes], { type: 'application/pdf' }), 'signed_document.pdf');
+        
+        const response = await fetch('../save_signed_document.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save the signed document');
+        }
+
+        const result = await response.json();
+        if (result.success) {
+            alert('Document signed and saved successfully!');
+            // Redirect back to the recipient_documents.php page
+            window.location.href = '../recipient_documents.php';
+        } else {
+            throw new Error(result.message || 'Failed to save the signed document');
+        }
     } catch (error) {
-        console.error('Error downloading PDF:', error);
-        alert('Error generating PDF. Please try again.');
+        console.error('Error saving signed PDF:', error);
+        alert('Error saving signed PDF. Please try again.');
     } finally {
         loadingOverlay.classList.add('hidden');
     }
