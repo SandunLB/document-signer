@@ -448,8 +448,8 @@ async function handleDownload() {
         const result = await response.json();
         if (result.success) {
             alert('Document signed and saved successfully!');
-            // Redirect back to the recipient_documents.php page
-            window.location.href = '../recipient_documents.php';
+            // Redirect back to the documents_to_sign.php page
+            window.location.href = '../documents_to_sign.php';
         } else {
             throw new Error(result.message || 'Failed to save the signed document');
         }
