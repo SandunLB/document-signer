@@ -1,5 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { PDFDocument, rgb } from 'pdf-lib';
+import CryptoJS from 'crypto-js'; 
 
 // Set worker path to local file
 pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.js';
@@ -411,30 +412,36 @@ async function handleDownload() {
 
     const elements = document.querySelectorAll('.signature-preview, .date-time-preview, .stamp-preview, .text-preview');
     if (elements.length === 0) {
-        alert('Please add at least one element (signature, date & time, stamp, or text) to the document');
+        alert('Please add at least one element to the document');
         return;
     }
 
+    // Get loading overlay element
     const loadingOverlay = document.getElementById('loading-overlay');
+    if (!loadingOverlay) {
+        console.error('Loading overlay element not found');
+        return;
+    }
+
+    // Show loading overlay
     loadingOverlay.classList.remove('hidden');
+    loadingOverlay.style.display = 'flex';
 
     try {
+        // Get the PDF canvas
         const pdfCanvas = document.querySelector('#pdf-viewer canvas');
-        const elementsData = Array.from(elements).map(element => ({
-            type: element.className,
-            x: parseInt(element.style.left) / pdfCanvas.width,
-            y: 1 - (parseInt(element.style.top) + element.offsetHeight) / pdfCanvas.height,
-            width: element.offsetWidth / pdfCanvas.width,
-            height: element.offsetHeight / pdfCanvas.height,
-            content: element.tagName.toLowerCase() === 'img' ? element.src : element.textContent
-        }));
+        if (!pdfCanvas) {
+            throw new Error('PDF canvas not found');
+        }
 
-        // Create new PDF with added elements
-        const pdfBytes = await createModifiedPDF(elementsData);
-        
-        // Send the modified PDF to the server
-        const formData = new FormData();
-        formData.append('pdf', new Blob([pdfBytes], { type: 'application/pdf' }), 'signed_document.pdf');
+        const elementsData = Array.from(elements)
+            .map(element => ({
+                type: element.className,
+                ...getElementPosition(element, pdfCanvas)
+            }))
+            .filter(data => data !== null);
+
+        const formData = await createModifiedPDF(elementsData);
         
         const response = await fetch('../save_signed_document.php', {
             method: 'POST',
@@ -448,7 +455,6 @@ async function handleDownload() {
         const result = await response.json();
         if (result.success) {
             alert('Document signed and saved successfully!');
-            // Redirect back to the documents_to_sign.php page
             window.location.href = '../documents_to_sign.php';
         } else {
             throw new Error(result.message || 'Failed to save the signed document');
@@ -457,21 +463,30 @@ async function handleDownload() {
         console.error('Error saving signed PDF:', error);
         alert('Error saving signed PDF. Please try again.');
     } finally {
+        // Hide loading overlay
         loadingOverlay.classList.add('hidden');
+        loadingOverlay.style.display = 'none';
     }
 }
 
 async function createModifiedPDF(elementsData) {
-    const formData = new FormData();
     const pdfFile = document.getElementById('document-upload').files[0];
     const pdfArrayBuffer = await pdfFile.arrayBuffer();
     
     const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+    
+    // Add metadata
+    pdfDoc.setTitle('Signed Document');
+    pdfDoc.setAuthor(window.currentUser?.name || 'Unknown User'); // You'll need to set currentUser in your app
+    pdfDoc.setCreator('SignEase Document System');
+    pdfDoc.setProducer('SignEase v1.0');
+    pdfDoc.setModificationDate(new Date());
+
     const pages = pdfDoc.getPages();
     const page = pages[currentPage - 1];
-
     const { width, height } = page.getSize();
 
+    // Add existing element drawing code
     for (const element of elementsData) {
         if (element.type === 'signature-preview' || element.type === 'stamp-preview') {
             const imageBytes = await fetch(element.content).then(res => res.arrayBuffer());
@@ -492,5 +507,40 @@ async function createModifiedPDF(elementsData) {
         }
     }
 
-    return await pdfDoc.save();
+    // Generate the modified PDF
+    const modifiedPdfBytes = await pdfDoc.save();
+    
+    // Calculate hash of the modified PDF
+    // Convert ArrayBuffer to WordArray that CryptoJS can handle
+    const wordArray = CryptoJS.lib.WordArray.create(modifiedPdfBytes);
+    const hash = CryptoJS.SHA256(wordArray);
+    
+    // Create form data with both PDF and metadata
+    const formData = new FormData();
+    formData.append('pdf', new Blob([modifiedPdfBytes], { type: 'application/pdf' }));
+    formData.append('metadata', JSON.stringify({
+        hash: hash.toString(),
+        author: window.currentUser?.name || 'Unknown User',
+        timestamp: new Date().toISOString(),
+        originalFilename: pdfFile.name
+    }));
+
+    return formData;
+}
+
+function arrayBufferToString(buffer) {
+    return String.fromCharCode.apply(null, new Uint8Array(buffer));
+}
+
+function getElementPosition(element, pdfCanvas) {
+    if (!pdfCanvas) return null;
+    
+    const canvasRect = pdfCanvas.getBoundingClientRect();
+    return {
+        x: parseInt(element.style.left) / canvasRect.width,
+        y: 1 - (parseInt(element.style.top) + element.offsetHeight) / canvasRect.height,
+        width: element.offsetWidth / canvasRect.width,
+        height: element.offsetHeight / canvasRect.height,
+        content: element.tagName.toLowerCase() === 'img' ? element.src : element.textContent
+    };
 }

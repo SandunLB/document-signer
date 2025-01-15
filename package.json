@@ -10,6 +10,7 @@
     "setup": "mkdir -p public && cp node_modules/pdfjs-dist/build/pdf.worker.mjs public/pdf.worker.js"
   },
   "dependencies": {
+    "crypto-js": "^4.2.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "4.9.155"
   },
